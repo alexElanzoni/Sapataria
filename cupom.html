@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cupom - Sapataria</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Courier New', 'Consolas', monospace;
+            background: #e0e0e0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .cupom-container {
+            background: white;
+            width: 100%;
+            max-width: 300px;
+            margin: 0 auto;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        .cupom {
+            padding: 12px 8px;
+            font-size: 10pt;
+            line-height: 1.3;
+        }
+        .cupom h2 {
+            font-size: 14pt;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .cupom .linha {
+            border-top: 1px dashed #000;
+            margin: 8px 0;
+        }
+        .cupom .destaque {
+            font-size: 14pt;
+            font-weight: bold;
+            text-align: center;
+            margin: 10px 0;
+            letter-spacing: 2px;
+        }
+        .cupom .info-row {
+            margin: 4px 0;
+            display: flex;
+            justify-content: space-between;
+        }
+        .cupom .total {
+            font-size: 12pt;
+            font-weight: bold;
+            text-align: center;
+            margin: 10px 0;
+        }
+        .cupom .rodape {
+            text-align: center;
+            font-size: 8pt;
+            margin-top: 12px;
+        }
+        .btn-imprimir {
+            background: #2c3e50;
+            color: white;
+            border: none;
+            padding: 10px;
+            width: 100%;
+            font-size: 1rem;
+            cursor: pointer;
+            font-family: monospace;
+        }
+        .btn-imprimir:hover {
+            background: #1abc9c;
+        }
+        .erro {
+            color: red;
+            padding: 20px;
+            text-align: center;
+        }
+        @media print {
+            body {
+                background: white;
+                padding: 0;
+                margin: 0;
+            }
+            .btn-imprimir {
+                display: none;
+            }
+            .cupom-container {
+                box-shadow: none;
+                max-width: 100%;
+            }
+            .cupom {
+                padding: 0;
+                margin: 0;
+            }
+            @page {
+                size: 58mm auto;
+                margin: 0mm;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="cupom-container">
+    <div class="cupom" id="cupom">Carregando...</div>
+    <button class="btn-imprimir" onclick="window.print()">🖨️ Imprimir Cupom</button>
+</div>
+
+<script src="storage.js"></script>
+<script>
+    // Configuração da loja
+    const NOME_LOJA = "SAPATARIA CENTRAL";
+    const TELEFONE_LOJA = "(11) 99999-9999";
+    const ENDERECO_LOJA = "Rua dos Sapatos, 123 - Centro";
+
+    // Helper para escapar HTML
+    function escapeHtml(texto) {
+        if (!texto) return '';
+        return texto.replace(/[&<>]/g, function(m) {
+            if (m === '&') return '&amp;';
+            if (m === '<') return '&lt;';
+            if (m === '>') return '&gt;';
+            return m;
+        });
+    }
+
+    // Obter OS da URL
+    const params = new URLSearchParams(window.location.search);
+    const osId = params.get('id');
+
+    if (!osId) {
+        document.getElementById('cupom').innerHTML = '<div class="erro">❌ Nenhuma OS informada. Use ?id=OS-XXXX</div>';
+    } else {
+        const ordens = getOrdens();
+        const os = ordens.find(o => o.id === osId);
+        if (!os) {
+            document.getElementById('cupom').innerHTML = `<div class="erro">❌ OS ${osId} não encontrada.</div>`;
+        } else {
+            const cliente = buscarClientePorId(os.clienteId);
+            if (!cliente) {
+                document.getElementById('cupom').innerHTML = '<div class="erro">❌ Cliente não encontrado.</div>';
+            } else {
+                // Filtra apenas os itens ativos (não cancelados)
+                const itensAtivos = os.itens.filter(item => item.status !== 'cancelado');
+
+                // Se não houver itens ativos, exibir mensagem
+                if (itensAtivos.length === 0) {
+                    document.getElementById('cupom').innerHTML = `<div class="erro">⚠️ Esta OS não possui itens ativos (todos foram cancelados).</div>`;
+                } else {
+                    let itensHtml = '';
+                    itensAtivos.forEach(item => {
+                        const tipoExibicao = (item.tipoObjeto === 'outro' && item.tipoPersonalizado) ? item.tipoPersonalizado : item.tipoObjeto;
+                        itensHtml += `
+                            <div class="info-row">
+                                <span>${tipoExibicao} (${item.quantidade}x):</span>
+                                <span>R$ ${(item.valorItem || 0).toFixed(2)}</span>
+                            </div>
+                        `;
+                        if (item.caracteristicas) {
+                            itensHtml += `<div style="margin-left: 8px; font-size: 9pt;">🔹 ${escapeHtml(item.caracteristicas)}</div>`;
+                        }
+                        if (item.servicoItem) {
+                            itensHtml += `<div style="margin-left: 8px; font-size: 9pt;">✂️ ${escapeHtml(item.servicoItem)}</div>`;
+                        }
+                    });
+
+                    // Calcular total (já está em os.valor, mas garantimos)
+                    const total = itensAtivos.reduce((s, i) => s + (i.valorItem || 0), 0);
+
+                    const html = `
+                        <h2>${escapeHtml(NOME_LOJA)}</h2>
+                        <div style="text-align: center; font-size:8pt;">${escapeHtml(ENDERECO_LOJA)}</div>
+                        <div style="text-align: center; font-size:8pt;">Tel: ${escapeHtml(TELEFONE_LOJA)}</div>
+                        <div class="linha"></div>
+                        <div class="destaque">${os.id}</div>
+                        <div class="linha"></div>
+                        <div class="info-row"><span>Cliente:</span><span>${escapeHtml(cliente.nome)}</span></div>
+                        <div class="info-row"><span>Telefone:</span><span>${escapeHtml(cliente.telefone)}</span></div>
+                        <div class="linha"></div>
+                        <div><strong>Itens do serviço:</strong></div>
+                        ${itensHtml}
+                        <div class="linha"></div>
+                        <div class="info-row">
+                            <span>Data entrada:</span>
+                            <span>${new Date(os.dataEntrada).toLocaleDateString('pt-BR')}</span>
+                        </div>
+                        <div class="info-row">
+                            <span>Data retirada:</span>
+                            <span>${new Date(os.dataRetirada).toLocaleDateString('pt-BR')}</span>
+                        </div>
+                        <div class="linha"></div>
+                        <div class="total">TOTAL: R$ ${total.toFixed(2)}</div>
+                        <div class="linha"></div>
+                        <div class="rodape">
+                            ⚠️ Guarde este cupom para retirar seu item.<br>
+                            Apresente na loja no ato da retirada.
+                        </div>
+                        <div style="text-align: center; font-size:7pt; margin-top: 6px;">
+                            Emitido em ${new Date().toLocaleString('pt-BR')}
+                        </div>
+                    `;
+                    document.getElementById('cupom').innerHTML = html;
+                }
+            }
+        }
+    }
+</script>
+</body>
+</html>

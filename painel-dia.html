@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Painel do Dia - Sapataria</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .contador { background:#f8f9fa; padding:10px; border-radius:8px; margin-bottom:20px; text-align:center; font-weight:bold; }
+        .os-card { background:white; border-left:5px solid #1abc9c; margin-bottom:12px; padding:12px; border-radius:6px; }
+        .os-card.pronto { border-left-color:#f39c12; background:#fffef7; }
+        .os-card.atrasado { border-left-color:#e74c3c; background:#f8d7da; }
+        .os-titulo { display:flex; justify-content:space-between; margin-bottom:8px; }
+        .btn-sm { padding:4px 8px; font-size:0.8rem; }
+        .tab-button.active { background:#1abc9c; color:white; border:none; }
+        .tab-pane { display: none; }
+        .tab-pane.active { display: block; }
+        .status-badge { display:inline-block; padding:2px 8px; border-radius:20px; font-size:0.7rem; }
+        .status-em_andamento { background:#f39c12; color:white; }
+        .status-pronto { background:#3498db; color:white; }
+        .atrasado-badge { background:#e74c3c; color:white; padding:4px 8px; border-radius:4px; display:inline-block; margin-bottom:6px; font-weight:bold; }
+
+        /* Modal personalizado (popup) */
+        .modal-panel {
+            display: none;
+            position: fixed;
+            top:0; left:0;
+            width:100%; height:100%;
+            background:rgba(0,0,0,0.5);
+            justify-content:center;
+            align-items:center;
+            z-index:2000;
+        }
+        .modal-panel .modal-box {
+            background:#C0C0C0;
+            border:2px solid #FFFFFF;
+            border-right-color:#808080;
+            border-bottom-color:#808080;
+            padding:20px;
+            max-width:300px;
+            text-align:center;
+        }
+        .modal-panel button {
+            margin:5px;
+            padding:4px 12px;
+        }
+        .metodos-pagamento {
+            display:flex;
+            flex-wrap:wrap;
+            gap:8px;
+            justify-content:center;
+            margin:15px 0;
+        }
+        .metodos-pagamento button {
+            margin:0;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>📅 Painel do Dia</h1>
+        <div class="nav-menu">
+            <a href="index.html">Início</a>
+            <a href="clientes.html">Clientes</a>
+            <a href="ordem-servico.html">OS</a>
+            <a href="painel-dia.html">Painel</a>
+            <a href="caixa.html">Caixa</a>
+            <a href="relatorios.html">Relatórios</a>
+        </div>
+    </div>
+    <div class="content">
+        <div id="contador" class="contador">Carregando...</div>
+        <div class="tabs">
+            <button class="tab-button active" data-tab="hoje">📦 Entregas Hoje</button>
+            <button class="tab-button" data-tab="atrasadas">⚠️ Atrasadas</button>
+            <button class="tab-button" data-tab="abertas">🔄 Todas em Aberto</button>
+        </div>
+        <div id="tab-hoje" class="tab-pane active"><div id="lista-hoje"></div></div>
+        <div id="tab-atrasadas" class="tab-pane"><div id="lista-atrasadas"></div></div>
+        <div id="tab-abertas" class="tab-pane"><div id="lista-abertas"></div></div>
+    </div>
+</div>
+
+<!-- Modal de confirmação (Marcar Pronto) -->
+<div id="modalConfirm" class="modal-panel">
+    <div class="modal-box">
+        <p id="confirmMsg">Tem certeza?</p>
+        <button id="confirmSim" class="btn btn-primary">Sim</button>
+        <button id="confirmNao" class="btn btn-secondary">Não</button>
+    </div>
+</div>
+
+<!-- Modal de pagamento (Dar Baixa) -->
+<div id="modalPagamento" class="modal-panel">
+    <div class="modal-box">
+        <p>Forma de pagamento:</p>
+        <div class="metodos-pagamento">
+            <button class="btn-pagamento" data-metodo="pix">PIX</button>
+            <button class="btn-pagamento" data-metodo="debito">Débito</button>
+            <button class="btn-pagamento" data-metodo="credito">Crédito</button>
+            <button class="btn-pagamento" data-metodo="especie">Espécie</button>
+        </div>
+        <button id="cancelarPagamento" class="btn btn-secondary">Cancelar</button>
+    </div>
+</div>
+
+<script src="storage.js"></script>
+<script>
+    // ---------- Auxiliares ----------
+    function formatarData(d) { return new Date(d).toLocaleDateString('pt-BR'); }
+    function escapeHtml(t) { if(!t) return ''; return t.replace(/[&<>]/g, m=>m==='&'?'&amp;':m==='<'?'&lt;':'&gt;'); }
+
+    // ---------- Variáveis e funções dos modais ----------
+    let confirmResolve = null;
+    let pagamentoResolve = null;
+
+    function mostrarConfirm(mensagem) {
+        return new Promise((resolve) => {
+            document.getElementById('confirmMsg').innerText = mensagem;
+            document.getElementById('modalConfirm').style.display = 'flex';
+            confirmResolve = resolve;
+        });
+    }
+    function fecharConfirm() {
+        document.getElementById('modalConfirm').style.display = 'none';
+        if (confirmResolve) confirmResolve(false);
+        confirmResolve = null;
+    }
+    document.getElementById('confirmSim').onclick = () => {
+        document.getElementById('modalConfirm').style.display = 'none';
+        if (confirmResolve) confirmResolve(true);
+        confirmResolve = null;
+    };
+    document.getElementById('confirmNao').onclick = fecharConfirm;
+
+    function mostrarPagamento() {
+        return new Promise((resolve) => {
+            document.getElementById('modalPagamento').style.display = 'flex';
+            pagamentoResolve = resolve;
+        });
+    }
+    function fecharPagamento() {
+        document.getElementById('modalPagamento').style.display = 'none';
+        if (pagamentoResolve) pagamentoResolve(null);
+        pagamentoResolve = null;
+    }
+    document.querySelectorAll('.btn-pagamento').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const metodo = btn.getAttribute('data-metodo');
+            if (pagamentoResolve) pagamentoResolve(metodo);
+            fecharPagamento();
+        });
+    });
+    document.getElementById('cancelarPagamento').onclick = fecharPagamento;
+    window.onclick = (e) => {
+        if (e.target.classList && e.target.classList.contains('modal-panel')) {
+            fecharConfirm();
+            fecharPagamento();
+        }
+    };
+
+    // ---------- Ações das OSs ----------
+    async function marcarProntoOS(osId) {
+        const ok = await mostrarConfirm(`Marcar OS ${osId} como PRONTA?`);
+        if (ok) {
+            const resultado = marcarPronto(osId);
+            if (resultado) {
+                carregarTodasAbas();   // recarrega sem alert
+            } else {
+                alert('Erro ao marcar como pronta.');
+            }
+        }
+    }
+
+    async function darBaixaOS(osId, valor) {
+        const metodo = await mostrarPagamento();
+        if (metodo) {
+            const resultado = darBaixa(osId, metodo);
+            if (resultado) {
+                carregarTodasAbas();   // recarrega sem alert
+            } else {
+                alert('Erro ao dar baixa. Verifique se a OS está pronta.');
+            }
+        }
+    }
+
+    function verCupom(osId) { window.open(`cupom.html?id=${osId}`, '_blank'); }
+
+    // ---------- Carregamento das listas ----------
+    function getOrdensHoje() {
+        const hoje = new Date().toISOString().slice(0,10);
+        return getOrdens().filter(o => o.status !== 'entregue' && o.status !== 'cancelada' && new Date(o.dataRetirada).toISOString().slice(0,10) === hoje);
+    }
+    function getOrdensAtrasadas() {
+        const hoje = new Date().toISOString().slice(0,10);
+        return getOrdens().filter(o => o.status !== 'entregue' && o.status !== 'cancelada' && new Date(o.dataRetirada).toISOString().slice(0,10) < hoje);
+    }
+    function getOrdensEmAberto() {
+        return getOrdens().filter(o => o.status !== 'entregue' && o.status !== 'cancelada');
+    }
+
+    function atualizarContador() {
+        const qtd = getOrdensHoje().length;
+        document.getElementById('contador').innerHTML = qtd ? `📦 <span style="color:#e74c3c">${qtd}</span> entrega(s) prevista(s) para hoje` : '✅ Nenhuma entrega prevista para hoje';
+    }
+
+    function renderizarLista(ordens, containerId) {
+        const container = document.getElementById(containerId);
+        if (!ordens.length) {
+            container.innerHTML = '<p>Nenhuma OS encontrada.</p>';
+            return;
+        }
+        let html = '';
+        ordens.forEach(os => {
+            const cliente = buscarClientePorId(os.clienteId);
+            const nomeCliente = cliente ? cliente.nome : '?';
+            const itensAtivos = os.itens.filter(i => i.status !== 'cancelado');
+            const resumoItens = itensAtivos.map(i => `${i.quantidade}x ${i.tipoObjeto === 'outro' && i.tipoPersonalizado ? i.tipoPersonalizado : i.tipoObjeto}`).join(', ');
+            
+            const hoje = new Date().toISOString().slice(0,10);
+            const isAtrasada = (new Date(os.dataRetirada).toISOString().slice(0,10) < hoje) && os.status !== 'entregue';
+            let cardClass = '';
+            let statusHtml = '';
+            if (isAtrasada) {
+                cardClass = 'atrasado';
+                statusHtml = '<div class="atrasado-badge">⚠️ ATRASADA</div>';
+            } else {
+                const statusText = os.status === 'em_andamento' ? 'Em andamento' : 'Pronto';
+                const statusClass = os.status === 'em_andamento' ? 'status-em_andamento' : 'status-pronto';
+                statusHtml = `<span class="status-badge ${statusClass}">${statusText}</span>`;
+                if (os.status === 'pronto') cardClass = 'pronto';
+            }
+            
+            html += `
+                <div class="os-card ${cardClass}">
+                    <div class="os-titulo">
+                        <strong class="os-id">${os.id}</strong>
+                        ${statusHtml}
+                    </div>
+                    <div><strong>Cliente:</strong> ${escapeHtml(nomeCliente)}</div>
+                    <div><strong>Telefone:</strong> ${escapeHtml(cliente ? cliente.telefone : '')}</div>
+                    <div><strong>Itens:</strong> ${escapeHtml(resumoItens)}</div>
+                    <div><strong>Data retirada:</strong> ${formatarData(os.dataRetirada)}</div>
+                    <div><strong>Valor:</strong> R$ ${os.valor.toFixed(2)}</div>
+                    <div class="acoes" style="margin-top:10px;">
+                        ${os.status === 'em_andamento' ? `<button class="btn btn-success btn-sm" onclick="marcarProntoOS('${os.id}')">✓ Marcar Pronto</button>` : ''}
+                        ${os.status === 'pronto' ? `<button class="btn btn-warning btn-sm" onclick="darBaixaOS('${os.id}', ${os.valor})">💰 Dar Baixa</button>` : ''}
+                        <button class="btn btn-secondary btn-sm" onclick="verCupom('${os.id}')">🖨️ Cupom</button>
+                    </div>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    }
+
+    function carregarTodasAbas() {
+        renderizarLista(getOrdensHoje(), 'lista-hoje');
+        renderizarLista(getOrdensAtrasadas(), 'lista-atrasadas');
+        renderizarLista(getOrdensEmAberto(), 'lista-abertas');
+        atualizarContador();
+    }
+
+    // Inicializar abas
+    document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById(`tab-${btn.dataset.tab}`).classList.add('active');
+        });
+    });
+
+    carregarTodasAbas();
+</script>
+</body>
+</html>

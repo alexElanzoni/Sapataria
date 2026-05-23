@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clientes - Sapataria</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 800px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+        }
+        .tabela-os {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        .tabela-os th, .tabela-os td {
+            border: 1px solid #ddd;
+            padding: 6px;
+            text-align: left;
+            font-size: 0.85rem;
+        }
+        .tabela-os th {
+            background-color: #f2f2f2;
+        }
+        .detalhe-item {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 6px;
+        }
+        .detalhe-item p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>👥 Clientes</h1>
+        <div class="nav-menu">
+            <a href="index.html">🏠 Início</a>
+            <a href="clientes.html">👥 Clientes</a>
+            <a href="ordem-servico.html">📝 OS</a>
+            <a href="painel-dia.html">📅 Painel</a>
+            <a href="caixa.html">💰 Caixa</a>
+            <a href="estoque.html">📦 Estoque</a>
+            <a href="relatorios.html">📊 Relatórios</a>
+        </div>
+    </div>
+    <div class="content">
+        <div class="card">
+            <h2 class="card-title">🔍 Buscar Cliente</h2>
+            <div class="search-box">
+                <input type="text" id="busca-cliente" placeholder="Digite nome ou telefone do cliente">
+                <button id="btn-buscar" class="btn btn-primary">Buscar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal que exibe as OS não finalizadas do cliente -->
+<div id="modal-os-list" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>📋 Ordens de Serviço em Aberto</h3>
+            <button class="fechar-modal" data-modal="modal-os-list" class="btn btn-secondary">&times;</button>
+        </div>
+        <div id="conteudo-os-list"></div>
+        <div class="modal-buttons">
+            <button class="btn btn-secondary fechar-modal" data-modal="modal-os-list">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para exibir detalhes de uma OS (popup igual ao cupom, mas com ações) -->
+<div id="modal-os-detalhe" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3>📄 Detalhes da OS: <span id="detalhe-os-id"></span></h3>
+            <button class="fechar-modal" data-modal="modal-os-detalhe" class="btn btn-secondary">&times;</button>
+        </div>
+        <div id="conteudo-os-detalhe"></div>
+        <div class="modal-buttons">
+            <button id="detalhe-editar" class="btn btn-primary">✏️ Editar OS</button>
+            <button id="detalhe-finalizar" class="btn btn-success">💰 Finalizar</button>
+            <button id="detalhe-cupom" class="btn btn-secondary">🖨️ Cupom</button>
+            <button class="btn btn-secondary fechar-modal" data-modal="modal-os-detalhe">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<script src="storage.js"></script>
+<script>
+    function escapeHtml(t) { if(!t) return ''; return t.replace(/[&<>]/g, m=>m==='&'?'&amp;':m==='<'?'&lt;':'&gt;'); }
+    function formatarData(d) { return new Date(d).toLocaleDateString('pt-BR'); }
+    function formatarMoeda(v) { return `R$ ${v.toFixed(2)}`; }
+
+    // Controle de modais
+    function abrirModal(id) { document.getElementById(id).style.display = 'flex'; }
+    function fecharModal(id) { document.getElementById(id).style.display = 'none'; }
+    document.querySelectorAll('.fechar-modal').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const modalId = btn.getAttribute('data-modal');
+            if(modalId) fecharModal(modalId);
+        });
+    });
+    window.onclick = e => { if(e.target.classList?.contains('modal')) e.target.style.display = 'none'; };
+
+    let clienteAtual = null;
+    let osAtual = null;
+
+    // Buscar cliente e listar OS em aberto
+    document.getElementById('btn-buscar').addEventListener('click', () => {
+        const termo = document.getElementById('busca-cliente').value.trim();
+        if(!termo) { alert('Digite nome ou telefone'); return; }
+        const clientes = buscarClientes(termo);
+        if(clientes.length === 0) { alert('Nenhum cliente encontrado'); return; }
+        let cliente;
+        if(clientes.length === 1) cliente = clientes[0];
+        else {
+            let msg = 'Clientes encontrados:\n';
+            clientes.forEach((c,i)=>msg+=`${i+1} - ${c.nome} (${c.telefone})\n`);
+            const opt = prompt(msg+'Digite o número do cliente:');
+            const idx = parseInt(opt)-1;
+            if(!clientes[idx]) return;
+            cliente = clientes[idx];
+        }
+        clienteAtual = cliente;
+        const todasOs = getOrdensPorCliente(cliente.id);
+        const osAbertas = todasOs.filter(os => os.status === 'em_andamento' || os.status === 'pronto');
+        const div = document.getElementById('conteudo-os-list');
+        if(osAbertas.length === 0) {
+            div.innerHTML = `<p>Cliente ${escapeHtml(cliente.nome)} não possui OS em aberto.</p>`;
+        } else {
+            let html = `<p><strong>${escapeHtml(cliente.nome)}</strong> (${escapeHtml(cliente.telefone)})</p>`;
+            html += '<table class="tabela-os"><thead><tr><th>OS</th><th>Itens</th><th>Valor</th><th>Data retirada</th><th>Status</th><th>Ações</th></tr></thead><tbody>';
+            osAbertas.forEach(os => {
+                const itensAtivos = os.itens.filter(i => i.status !== 'cancelado');
+                const resumo = itensAtivos.map(i => `${i.quantidade}x ${i.tipoObjeto==='outro'&&i.tipoPersonalizado?i.tipoPersonalizado:i.tipoObjeto}`).join(', ');
+                const statusText = os.status === 'em_andamento' ? 'Em andamento' : 'Pronto';
+                html += `<tr>
+                            <td>${os.id}</td
+                            <td>${resumo.substring(0,50)}</td
+                            <td>${formatarMoeda(os.valor)}</td
+                            <td>${formatarData(os.dataRetirada)}</td
+                            <td>${statusText}</td
+                            <td><button class="ver-detalhes" data-id="${os.id}">🔍 Ver detalhes</button></td
+                        </tr>`;
+            });
+            html += '</tbody><tr>';
+            div.innerHTML = html;
+            // Evento para abrir detalhes da OS
+            div.querySelectorAll('.ver-detalhes').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const osId = btn.getAttribute('data-id');
+                    const ordens = getOrdens();
+                    const os = ordens.find(o => o.id === osId);
+                    if(os) abrirDetalhesOS(os);
+                });
+            });
+        }
+        abrirModal('modal-os-list');
+    });
+
+    // Abrir popup de detalhes da OS (similar ao cupom)
+    function abrirDetalhesOS(os) {
+        osAtual = os;
+        document.getElementById('detalhe-os-id').innerText = os.id;
+        const cliente = buscarClientePorId(os.clienteId);
+        let itensHtml = '';
+        os.itens.filter(i => i.status !== 'cancelado').forEach(item => {
+            const tipoExibicao = item.tipoObjeto === 'outro' && item.tipoPersonalizado ? item.tipoPersonalizado : item.tipoObjeto;
+            itensHtml += `
+                <div class="detalhe-item">
+                    <p><strong>${tipoExibicao}</strong> (${item.quantidade}x) - ${formatarMoeda(item.valorItem)}</p>
+                    <p><strong>Características:</strong> ${escapeHtml(item.caracteristicas || '—')}</p>
+                    <p><strong>Serviço:</strong> ${escapeHtml(item.servicoItem)}</p>
+                </div>
+            `;
+        });
+        const html = `
+            <div><strong>Cliente:</strong> ${escapeHtml(cliente?.nome)} (${escapeHtml(cliente?.telefone)})</div>
+            <div><strong>Data entrada:</strong> ${formatarData(os.dataEntrada)}</div>
+            <div><strong>Data retirada:</strong> ${formatarData(os.dataRetirada)}</div>
+            <div><strong>Status:</strong> ${os.status === 'em_andamento' ? 'Em andamento' : 'Pronto'}</div>
+            <hr>
+            <h4>Itens do serviço:</h4>
+            ${itensHtml}
+            <hr>
+            <div style="font-size:1.2rem; text-align:right;"><strong>Total: ${formatarMoeda(os.valor)}</strong></div>
+        `;
+        document.getElementById('conteudo-os-detalhe').innerHTML = html;
+        abrirModal('modal-os-detalhe');
+    }
+
+    // Ações dentro do popup de detalhes
+    document.getElementById('detalhe-editar').addEventListener('click', () => {
+        if(osAtual) {
+            // Redirecionar para ordem-servico.html com parâmetro de edição
+            window.location.href = `ordem-servico.html?edit=${osAtual.id}`;
+        } else alert('Nenhuma OS selecionada');
+    });
+    document.getElementById('detalhe-finalizar').addEventListener('click', () => {
+        if(osAtual && osAtual.status === 'pronto') {
+            const metodo = prompt('Forma de pagamento (pix, debito, credito, especie):');
+            if(metodo && darBaixa(osAtual.id, metodo)) {
+                alert('OS finalizada com sucesso!');
+                fecharModal('modal-os-detalhe');
+                // Recarregar lista de OS do cliente (fechar e reabrir)
+                document.getElementById('btn-buscar').click();
+            } else alert('Erro ou cancelado');
+        } else alert('Esta OS não está pronta para finalização.');
+    });
+    document.getElementById('detalhe-cupom').addEventListener('click', () => {
+        if(osAtual) window.open(`cupom.html?id=${osAtual.id}`, '_blank');
+    });
+</script>
+</body>
+</html>

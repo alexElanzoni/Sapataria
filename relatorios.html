@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatórios - Sapataria</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .modal {
+            display: none;
+            position: fixed;
+            top:0; left:0;
+            width:100%; height:100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+        }
+        .metodos-grid {
+            display: grid;
+            grid-template-columns: repeat(2,1fr);
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .metodo-item {
+            background: #f0f0f0;
+            padding: 8px;
+            border-radius: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+        .btn-voltar {
+            margin-bottom: 15px;
+            display: inline-block;
+        }
+        @media print {
+            .modal-buttons, .fechar-modal, .btn-voltar { display: none; }
+            .modal-content { margin: 0; padding: 0; max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>📊 Relatórios</h1>
+        <div class="nav-menu">
+            <a href="index.html">🏠 Início</a>
+            <a href="clientes.html">👥 Clientes</a>
+            <a href="ordem-servico.html">📝 OS</a>
+            <a href="painel-dia.html">📅 Painel</a>
+            <a href="caixa.html">💰 Caixa</a>
+            <a href="relatorios.html">📊 Relatórios</a>
+        </div>
+    </div>
+    <div class="content">
+        <!-- Botão Voltar -->
+        <button class="btn btn-secondary btn-voltar" onclick="history.back()">← Voltar</button>
+
+        <div class="card">
+            <h2 class="card-title">📆 Relatório Diário</h2>
+            <div class="filtro-periodo">
+                <input type="date" id="data-rel-dia" value="">
+                <button id="btn-diario" class="btn btn-primary">Gerar</button>
+            </div>
+        </div>
+        <div class="card">
+            <h2 class="card-title">📅 Relatório Mensal</h2>
+            <div class="filtro-periodo">
+                <select id="mes-rel"></select>
+                <input type="number" id="ano-rel" value="2026">
+                <button id="btn-mensal" class="btn btn-primary">Gerar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="modal-relatorio" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modal-titulo">Relatório</h3>
+            <button class="fechar-modal">&times;</button>
+        </div>
+        <div id="modal-conteudo"></div>
+        <div class="modal-buttons">
+            <button id="imprimir-modal" class="btn btn-primary">🖨️ Imprimir</button>
+            <button class="fechar-modal btn btn-secondary">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<script src="storage.js"></script>
+<script>
+    function formatarMoeda(v) { return `R$ ${v.toFixed(2)}`; }
+    function escapeHtml(t) { return t ? t.replace(/[&<>]/g, m=>m==='&'?'&amp;':m==='<'?'&lt;':'&gt;') : ''; }
+
+    const modal = document.getElementById('modal-relatorio');
+    const modalTitulo = document.getElementById('modal-titulo');
+    const modalConteudo = document.getElementById('modal-conteudo');
+
+    function abrirModal(titulo, html) {
+        modalTitulo.innerText = titulo;
+        modalConteudo.innerHTML = html;
+        modal.style.display = 'flex';
+    }
+    function fecharModal() { modal.style.display = 'none'; }
+    document.querySelectorAll('.fechar-modal').forEach(b => b.addEventListener('click', fecharModal));
+    window.onclick = e => { if(e.target === modal) fecharModal(); };
+    document.getElementById('imprimir-modal').addEventListener('click', () => {
+        const conteudo = modalConteudo.cloneNode(true);
+        const win = window.open('', '_blank');
+        win.document.write(`<html><head><title>Relatório</title><style>body{font-family:monospace;margin:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #000;padding:6px}th{background:#f0f0f0}</style></head><body>${conteudo.innerHTML}</body></html>`);
+        win.document.close();
+        win.print();
+    });
+
+    // Relatório diário
+    document.getElementById('btn-diario').addEventListener('click', () => {
+        let data = document.getElementById('data-rel-dia').value;
+        if(!data) data = new Date().toISOString().slice(0,10);
+        const rel = getRelatorioDiario(new Date(data));
+        let html = `<h3>Resumo do dia ${data}</h3>
+            <div class="metodos-grid">
+                <div class="metodo-item">Total Entradas: ${formatarMoeda(rel.caixa.totalEntradas)}</div>
+                <div class="metodo-item">Total Saídas: ${formatarMoeda(rel.caixa.totalSaidas)}</div>
+                <div class="metodo-item">Saldo: ${formatarMoeda(rel.caixa.saldo)}</div>
+            </div>
+            <h4>Entradas por método</h4><div class="metodos-grid">`;
+        for(const [met,val] of Object.entries(rel.caixa.porMetodo)) if(val>0) html += `<div class="metodo-item">${met.toUpperCase()}: ${formatarMoeda(val)}</div>`;
+        html += `</div><h4>OS pagas no dia</h4>`;
+        if(rel.ordensPagas.length) {
+            html += '<table><thead><tr><th>OS</th><th>Cliente</th><th>Valor</th><th>Pagamento</th></tr></thead><tbody>';
+            rel.ordensPagas.forEach(os => {
+                const cli = buscarClientePorId(os.clienteId);
+                html += `<tr><td>${os.id}</td><td>${escapeHtml(cli?.nome)}</td><td>${formatarMoeda(os.valor)}</td><td>${os.metodoPagamento?.toUpperCase()}</td></tr>`;
+            });
+            html += '</tbody></table>';
+        } else html += '<p>Nenhuma OS paga neste dia.</p>';
+        abrirModal(`Relatório Diário - ${data}`, html);
+    });
+
+    // Relatório mensal (apenas valores)
+    document.getElementById('btn-mensal').addEventListener('click', () => {
+        const mes = parseInt(document.getElementById('mes-rel').value);
+        const ano = parseInt(document.getElementById('ano-rel').value);
+        const ap = getApuraçãoMes(mes, ano);
+        let html = `<h3>Relatório Mensal - ${mes+1}/${ano}</h3>
+            <div class="metodos-grid">
+                <div class="metodo-item">Total Entradas: ${formatarMoeda(ap.totalEntradas)}</div>
+                <div class="metodo-item">Total Saídas: ${formatarMoeda(ap.totalSaidas)}</div>
+                <div class="metodo-item">Saldo: ${formatarMoeda(ap.saldo)}</div>
+            </div>
+            <h4>Entradas por método de pagamento</h4>
+            <div class="metodos-grid">`;
+        for(const [met,val] of Object.entries(ap.porMetodo)) if(val>0) html += `<div class="metodo-item">${met.toUpperCase()}: ${formatarMoeda(val)}</div>`;
+        html += `</div><p>Total de lançamentos: ${ap.lancamentos.length}</p>`;
+        abrirModal(`Relatório Mensal - ${mes+1}/${ano}`, html);
+    });
+
+    // Preencher combobox meses
+    const mesSelect = document.getElementById('mes-rel');
+    for(let i=0;i<12;i++) mesSelect.innerHTML += `<option value="${i}">${new Date(2000,i).toLocaleString('pt-BR',{month:'long'})}</option>`;
+    document.getElementById('data-rel-dia').value = new Date().toISOString().slice(0,10);
+</script>
+</body>
+</html>

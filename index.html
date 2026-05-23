@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sapataria - Sistema de OS</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .aviso { padding: 12px; border-radius: 6px; margin-bottom: 20px; }
+        .aviso-info { background: #d1ecf1; border-left: 5px solid #17a2b8; }
+        .aviso-alerta { background: #fff3cd; border-left: 5px solid #ffc107; }
+        .resumo-card {
+            display: flex;
+            gap: 15px;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
+        .resumo-item {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 6px;
+            flex: 1;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.1s;
+        }
+        .resumo-item:hover {
+            transform: scale(1.02);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .resumo-item .numero {
+            font-size: 1.8rem;
+            font-weight: bold;
+        }
+        .resumo-item.alerta {
+            background: #fff3cd;
+            border: 1px solid #ffc107;
+        }
+        .resumo-item.atrasado {
+            background: #f8d7da;
+            border: 1px solid #dc3545;
+        }
+        .resumo-item.atrasado .numero {
+            color: #c9302c;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 700px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .modal-buttons {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 20px;
+            padding-top: 10px;
+            border-top: 1px solid #ddd;
+        }
+        .card-lista {
+            border: 1px solid #ccc;
+            margin-bottom: 12px;
+            padding: 10px;
+            border-radius: 6px;
+            background: #f9f9f9;
+        }
+        @media print {
+            .modal-buttons, .fechar-modal { display: none; }
+            .modal-content { margin: 0; padding: 0; max-width: 100%; }
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>🩰 Sapataria Central</h1>
+        <div class="nav-menu">
+            <a href="index.html">🏠 Início</a>
+            <a href="clientes.html">👥 Clientes</a>
+            <a href="ordem-servico.html">📝 OS</a>
+            <a href="painel-dia.html">📅 Painel</a>
+            <a href="caixa.html">💰 Caixa</a>
+            <a href="relatorios.html">📊 Relatórios</a>
+        </div>
+    </div>
+    <div class="content">
+        <div id="aviso-container"></div>
+        <div class="card">
+            <h2 class="card-title">📊 Resumo do dia</h2>
+            <div id="resumo-dia" class="resumo-card">
+                <div class="resumo-item" id="card-abertas">
+                    <div class="numero" id="total-abertas">0</div>
+                    <div>OSs em aberto (total)</div>
+                </div>
+                <div class="resumo-item alerta" id="card-vence-hoje">
+                    <div class="numero" id="total-vence-hoje">0</div>
+                    <div>⚠️ Vencem HOJE</div>
+                </div>
+                <div class="resumo-item atrasado" id="card-atrasadas">
+                    <div class="numero" id="total-atrasadas">0</div>
+                    <div>⚠️ ATRASADAS</div>
+                </div>
+            </div>
+        </div>
+        <div class="card">
+            <h2 class="card-title">📌 Últimas Ordens de Serviço</h2>
+            <div id="ultimas-os">Carregando...</div>
+        </div>
+    </div>
+</div>
+
+<div id="modal-lista" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modal-titulo">Lista de OSs</h3>
+            <button class="fechar-modal" class="btn btn-secondary">&times;</button>
+        </div>
+        <div id="modal-conteudo" class="print-area"></div>
+        <div class="modal-buttons">
+            <button id="btn-imprimir-lista" class="btn btn-primary">🖨️ Imprimir</button>
+            <button class="fechar-modal btn btn-secondary">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<script src="storage.js"></script>
+<script>
+    function escapeHtml(t) { if(!t) return ''; return t.replace(/[&<>]/g, m=>m==='&'?'&amp;':m==='<'?'&lt;':'&gt;'); }
+    function formatarData(d) { return new Date(d).toLocaleDateString('pt-BR'); }
+    function formatarMoeda(v) { return `R$ ${v.toFixed(2)}`; }
+
+    const modal = document.getElementById('modal-lista');
+    const modalTitulo = document.getElementById('modal-titulo');
+    const modalConteudo = document.getElementById('modal-conteudo');
+    function abrirModal(titulo, html) {
+        modalTitulo.innerText = titulo;
+        modalConteudo.innerHTML = html;
+        modal.style.display = 'flex';
+    }
+    function fecharModal() { modal.style.display = 'none'; }
+    document.querySelectorAll('.fechar-modal').forEach(btn => btn.addEventListener('click', fecharModal));
+    window.onclick = e => { if(e.target === modal) fecharModal(); };
+    document.getElementById('btn-imprimir-lista').addEventListener('click', () => {
+        const conteudo = modalConteudo.cloneNode(true);
+        const win = window.open('', '_blank');
+        win.document.write(`<html><head><title>Lista de OSs</title><style>body{font-family:monospace;margin:20px}.card-lista{border:1px solid #ccc;margin-bottom:12px;padding:10px;border-radius:6px;}</style></head><body>${conteudo.innerHTML}</body></html>`);
+        win.document.close();
+        win.print();
+    });
+
+    // Função que gera a lista de OSs em formato de cards (uma abaixo da outra)
+    function gerarListaOS(ordens) {
+        if (!ordens.length) return '<p>Nenhuma OS encontrada.</p>';
+        let html = '';
+        ordens.forEach(os => {
+            const cliente = buscarClientePorId(os.clienteId);
+            const itensResumo = os.itens.filter(i=>i.status!=='cancelado').map(i=>`${i.quantidade}x ${i.tipoObjeto==='outro'&&i.tipoPersonalizado?i.tipoPersonalizado:i.tipoObjeto}`).join(', ');
+            html += `
+                <div class="card-lista">
+                    <div><strong>OS:</strong> ${os.id}</div>
+                    <div><strong>Cliente:</strong> ${escapeHtml(cliente?.nome||'?')}</div>
+                    <div><strong>Itens:</strong> ${escapeHtml(itensResumo)}</div>
+                    <div><strong>Data retirada:</strong> ${formatarData(os.dataRetirada)}</div>
+                    <div><strong>Valor:</strong> ${formatarMoeda(os.valor)}</div>
+                </div>
+            `;
+        });
+        return html;
+    }
+
+    // Evento ao clicar no card "Vencem HOJE"
+    document.getElementById('card-vence-hoje').addEventListener('click', () => {
+        const hoje = new Date().toISOString().slice(0,10);
+        const todas = getOrdens();
+        const venceHoje = todas.filter(o => {
+            if (o.status === 'entregue' || o.status === 'cancelada') return false;
+            return new Date(o.dataRetirada).toISOString().slice(0,10) === hoje;
+        });
+        abrirModal("OSs que VENCEM HOJE", gerarListaOS(venceHoje));
+    });
+
+    // Evento ao clicar no card "ATRASADAS"
+    document.getElementById('card-atrasadas').addEventListener('click', () => {
+        const hoje = new Date().toISOString().slice(0,10);
+        const todas = getOrdens();
+        const atrasadas = todas.filter(o => {
+            if (o.status === 'entregue' || o.status === 'cancelada') return false;
+            return new Date(o.dataRetirada).toISOString().slice(0,10) < hoje;
+        });
+        abrirModal("OSs ATRASADAS", gerarListaOS(atrasadas));
+    });
+
+    // Exibir aviso de OSs para entregar hoje
+    function exibirAviso() {
+        const ordensHoje = getOrdensParaEntregarHoje();
+        const div = document.getElementById('aviso-container');
+        if (ordensHoje.length === 0) {
+            div.innerHTML = '<div class="aviso aviso-info">✅ Nenhuma ordem de serviço para entregar hoje.</div>';
+        } else {
+            let lista = '<ul>';
+            ordensHoje.forEach(os => {
+                const cliente = buscarClientePorId(os.clienteId);
+                lista += `<li><strong>${os.id}</strong> - ${cliente ? cliente.nome : 'Cliente?'} (retirada: ${formatarData(os.dataRetirada)})</li>`;
+            });
+            lista += '</ul>';
+            div.innerHTML = `<div class="aviso aviso-alerta">⚠️ <strong>Atenção!</strong> Você tem ${ordensHoje.length} OS(s) para entregar hoje:<br>${lista}<br><a href="painel-dia.html" class="btn btn-primary" style="margin-top:5px;">Ver painel do dia</a></div>`;
+        }
+    }
+
+    // Carregar os números dos cards de resumo
+    function carregarResumo() {
+        const hoje = new Date().toISOString().slice(0,10);
+        const todas = getOrdens();
+        const emAberto = todas.filter(o => o.status === 'em_andamento' || o.status === 'pronto');
+        const venceHoje = todas.filter(o => {
+            if (o.status === 'entregue' || o.status === 'cancelada') return false;
+            return new Date(o.dataRetirada).toISOString().slice(0,10) === hoje;
+        });
+        const atrasadas = todas.filter(o => {
+            if (o.status === 'entregue' || o.status === 'cancelada') return false;
+            return new Date(o.dataRetirada).toISOString().slice(0,10) < hoje;
+        });
+        document.getElementById('total-abertas').innerText = emAberto.length;
+        document.getElementById('total-vence-hoje').innerText = venceHoje.length;
+        document.getElementById('total-atrasadas').innerText = atrasadas.length;
+    }
+
+    // Carregar as 5 últimas OS na tabela da página inicial
+    function carregarUltimasOS() {
+        const ordens = getOrdens();
+        if (ordens.length === 0) {
+            document.getElementById('ultimas-os').innerHTML = '<p>Nenhuma OS cadastrada.</p>';
+            return;
+        }
+        const ultimas = [...ordens].sort((a,b) => new Date(b.dataEntrada) - new Date(a.dataEntrada)).slice(0,5);
+        let html = '<table class="tabela"><thead><tr><th>OS</th><th>Cliente</th><th>Itens</th><th>Valor</th><th>Status</th></tr></thead><tbody>';
+        for (const os of ultimas) {
+            const cliente = buscarClientePorId(os.clienteId);
+            const itensAtivos = os.itens.filter(i => i.status !== 'cancelado');
+            const resumoItens = itensAtivos.map(i => `${i.quantidade}x ${i.tipoObjeto === 'outro' && i.tipoPersonalizado ? i.tipoPersonalizado : i.tipoObjeto}`).join(', ');
+            let statusText = '';
+            if (os.status === 'em_andamento') statusText = 'Em andamento';
+            else if (os.status === 'pronto') statusText = 'Pronto';
+            else if (os.status === 'entregue') statusText = 'Entregue';
+            else statusText = 'Cancelada';
+            html += `<tr>
+                        <td data-label="OS">${os.id}</td>
+                        <td data-label="Cliente">${escapeHtml(cliente?.nome||'?')}</td>
+                        <td data-label="Itens">${escapeHtml(resumoItens.substring(0,50))}</td>
+                        <td data-label="Valor">${formatarMoeda(os.valor)}</td
+                        <td data-label="Status">${statusText}</td
+                    </tr>`;
+        }
+        html += '</tbody></table>';
+        document.getElementById('ultimas-os').innerHTML = html;
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        exibirAviso();
+        carregarResumo();
+        carregarUltimasOS();
+    });
+</script>
+</body>
+</html>

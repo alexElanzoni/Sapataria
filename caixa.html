@@ -1,0 +1,326 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Caixa - Sapataria</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .resumo-card { display: flex; gap: 15px; flex-wrap: wrap; margin: 15px 0; }
+        .resumo-item { background: #f8f9fa; padding: 12px; border-radius: 6px; flex: 1; text-align: center; cursor: pointer; transition: transform 0.1s; }
+        .resumo-item:hover { transform: scale(1.02); }
+        .resumo-item.alerta { background: #fff3cd; border: 1px solid #ffc107; }
+        .resumo-item.atrasado { background: #f8d7da; border: 1px solid #dc3545; }
+        .resumo-item .valor { font-size: 1.5rem; font-weight: bold; }
+        .metodos-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: 10px; margin: 10px 0; }
+        .metodo-item { background: white; padding: 8px; border-radius: 6px; display: flex; justify-content: space-between; }
+        .filtro-periodo { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 20px; }
+        .modal { display: none; position: fixed; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: white; padding: 20px; border-radius: 8px; max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto; }
+        .modal-header { display: flex; justify-content: space-between; border-bottom: 1px solid #ddd; padding-bottom: 10px; margin-bottom: 15px; }
+        .tabela-lista { width: 100%; border-collapse: collapse; }
+        .tabela-lista th, .tabela-lista td { border: 1px solid #ddd; padding: 6px; text-align: left; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>💰 Caixa</h1>
+        <div class="nav-menu">
+            <a href="index.html">🏠 Início</a>
+            <a href="clientes.html">👥 Clientes</a>
+            <a href="ordem-servico.html">📝 OS</a>
+            <a href="painel-dia.html">📅 Painel</a>
+            <a href="caixa.html">💰 Caixa</a>
+            <a href="estoque.html">📦 Estoque</a>
+            <a href="relatorios.html">📊 Relatórios</a>
+        </div>
+    </div>
+    <div class="content">
+        <!-- Valores a Receber -->
+        <div class="card">
+            <h2 class="card-title">💰 Valores a Receber</h2>
+            <div class="resumo-card">
+                <div class="resumo-item alerta" id="card-vence-hoje">
+                    <div class="valor" id="valor-vence-hoje">R$ 0,00</div>
+                    <div>⚠️ Vencem HOJE</div>
+                    <small>(clique para listar)</small>
+                </div>
+                <div class="resumo-item atrasado" id="card-atrasadas">
+                    <div class="valor" id="valor-atrasadas">R$ 0,00</div>
+                    <div>⚠️ ATRASADAS</div>
+                    <small>(clique para listar)</small>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lançar Saída -->
+        <div class="card">
+            <h2 class="card-title">💸 Registrar Saída (Despesa)</h2>
+            <form id="saida-form">
+                <div class="row">
+                    <div class="col"><input type="text" id="saida-descricao" placeholder="Descrição" required></div>
+                    <div class="col"><input type="number" id="saida-valor" step="0.01" placeholder="Valor R$" required></div>
+                    <div class="col">
+                        <select id="saida-metodo" required>
+                            <option value="pix">PIX</option><option value="debito">Débito</option>
+                            <option value="credito">Crédito</option><option value="especie">Espécie</option>
+                        </select>
+                    </div>
+                    <div class="col"><button type="submit" class="btn btn-danger">Registrar Saída</button></div>
+                </div>
+            </form>
+        </div>
+
+        <!-- Apuração do Dia -->
+        <div class="card">
+            <h2 class="card-title">📆 Apuração do Dia</h2>
+            <div class="filtro-periodo">
+                <input type="date" id="data-apuracao" value="">
+                <button id="btn-apurar-dia" class="btn btn-primary">Apurar</button>
+            </div>
+            <div id="apuracao-dia"></div>
+        </div>
+
+        <!-- Apuração Mensal -->
+        <div class="card">
+            <h2 class="card-title">📊 Apuração Mensal</h2>
+            <div class="filtro-periodo">
+                <select id="mes-apuracao">
+                    <option value="0">Janeiro</option><option value="1">Fevereiro</option>
+                    <option value="2">Março</option><option value="3">Abril</option>
+                    <option value="4">Maio</option><option value="5">Junho</option>
+                    <option value="6">Julho</option><option value="7">Agosto</option>
+                    <option value="8">Setembro</option><option value="9">Outubro</option>
+                    <option value="10">Novembro</option><option value="11">Dezembro</option>
+                </select>
+                <input type="number" id="ano-apuracao" value="2025">
+                <button id="btn-apurar-mes" class="btn btn-primary">Apurar</button>
+            </div>
+            <div id="apuracao-mes"></div>
+        </div>
+
+        <!-- Listagem de Lançamentos -->
+        <div class="card">
+            <h2 class="card-title">📜 Histórico de Lançamentos</h2>
+            <div class="filtro-periodo">
+                <select id="filtro-tipo">
+                    <option value="todos">Todos</option>
+                    <option value="entrada">Entradas</option>
+                    <option value="saida">Saídas</option>
+                </select>
+                <button id="btn-filtrar" class="btn btn-primary">Filtrar</button>
+                <button id="btn-limpar-filtro" class="btn btn-secondary">Limpar</button>
+            </div>
+            <div id="lista-lancamentos"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para listar OSs -->
+<div id="modal-lista" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h3 id="modal-titulo">Lista de OSs</h3>
+            <button class="fechar-modal" class="btn btn-secondary">&times;</button>
+        </div>
+        <div id="modal-conteudo" class="print-area"></div>
+        <div class="modal-buttons" style="margin-top:15px; text-align:right">
+            <button id="btn-imprimir-lista" class="btn btn-primary">🖨️ Imprimir</button>
+            <button class="fechar-modal btn btn-secondary">Fechar</button>
+        </div>
+    </div>
+</div>
+
+<script src="storage.js"></script>
+<script>
+    console.log("Caixa carregado - verificando funções storage...");
+    // Verifica se as funções do storage existem
+    if (typeof getApuraçãoDia !== 'function') console.error("getApuraçãoDia não está definida!");
+    if (typeof getApuraçãoMes !== 'function') console.error("getApuraçãoMes não está definida!");
+
+    function formatarMoeda(v) { return `R$ ${v.toFixed(2)}`; }
+    function escapeHtml(t) { if(!t) return ''; return t.replace(/[&<>]/g, m=>m==='&'?'&amp;':m==='<'?'&lt;':'&gt;'); }
+    function formatarData(d) { return new Date(d).toLocaleDateString('pt-BR'); }
+
+    // ==================== VALORES A RECEBER ====================
+    function atualizarValoresReceber() {
+        const hoje = new Date().toISOString().slice(0,10);
+        const todas = getOrdens();
+        const venceHoje = todas.filter(o => {
+            if (o.status === 'entregue' || o.status === 'cancelada') return false;
+            return new Date(o.dataRetirada).toISOString().slice(0,10) === hoje;
+        });
+        const atrasadas = todas.filter(o => {
+            if (o.status === 'entregue' || o.status === 'cancelada') return false;
+            return new Date(o.dataRetirada).toISOString().slice(0,10) < hoje;
+        });
+        document.getElementById('valor-vence-hoje').innerText = formatarMoeda(venceHoje.reduce((s,o)=>s+o.valor,0));
+        document.getElementById('valor-atrasadas').innerText = formatarMoeda(atrasadas.reduce((s,o)=>s+o.valor,0));
+        window.listaVenceHoje = venceHoje;
+        window.listaAtrasadas = atrasadas;
+    }
+
+    document.getElementById('card-vence-hoje').addEventListener('click', () => {
+        if(window.listaVenceHoje) abrirModal("OSs que VENCEM HOJE", gerarListaOS(window.listaVenceHoje));
+        else alert("Nenhuma OS para hoje.");
+    });
+    document.getElementById('card-atrasadas').addEventListener('click', () => {
+        if(window.listaAtrasadas) abrirModal("OSs ATRASADAS", gerarListaOS(window.listaAtrasadas));
+        else alert("Nenhuma OS atrasada.");
+    });
+
+    function gerarListaOS(ordens) {
+        if(!ordens.length) return '<p>Nenhuma OS encontrada.</p>';
+        let html = `<table class="tabela-lista"><thead><tr><th>OS</th><th>Cliente</th><th>Itens</th><th>Data retirada</th><th>Valor</th></tr></thead><tbody>`;
+        ordens.forEach(os => {
+            const cliente = buscarClientePorId(os.clienteId);
+            const itensResumo = os.itens.filter(i=>i.status!=='cancelado').map(i=>`${i.quantidade}x ${i.tipoObjeto==='outro'&&i.tipoPersonalizado?i.tipoPersonalizado:i.tipoObjeto}`).join(', ');
+            html += `<tr><td>${os.id}</td><td>${escapeHtml(cliente?.nome||'?')}</td><td>${escapeHtml(itensResumo.substring(0,60))}</td><td>${formatarData(os.dataRetirada)}</td><td>${formatarMoeda(os.valor)}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        return html;
+    }
+
+    // ==================== MODAL ====================
+    const modal = document.getElementById('modal-lista');
+    const modalTitulo = document.getElementById('modal-titulo');
+    const modalConteudo = document.getElementById('modal-conteudo');
+    function abrirModal(titulo, html) {
+        modalTitulo.innerText = titulo;
+        modalConteudo.innerHTML = html;
+        modal.style.display = 'flex';
+    }
+    function fecharModal() { modal.style.display = 'none'; }
+    document.querySelectorAll('.fechar-modal').forEach(btn => btn.addEventListener('click', fecharModal));
+    window.onclick = e => { if(e.target === modal) fecharModal(); };
+    document.getElementById('btn-imprimir-lista').addEventListener('click', () => {
+        const conteudo = modalConteudo.cloneNode(true);
+        const win = window.open('', '_blank');
+        win.document.write(`<html><head><title>Lista de OSs</title><style>body{font-family:monospace;margin:20px}table{border-collapse:collapse;width:100%}th,td{border:1px solid #000;padding:6px}th{background:#f0f0f0}</style></head><body>${conteudo.innerHTML}</body></html>`);
+        win.document.close();
+        win.print();
+    });
+
+    // ==================== SAÍDA ====================
+    document.getElementById('saida-form').addEventListener('submit', (e) => {
+        e.preventDefault();
+        const descricao = document.getElementById('saida-descricao').value.trim();
+        const valor = parseFloat(document.getElementById('saida-valor').value);
+        const metodo = document.getElementById('saida-metodo').value;
+        if(!descricao || isNaN(valor) || valor<=0) return alert('Preencha corretamente');
+        registrarSaidaCaixa({valor, metodoPagamento:metodo, descricao});
+        alert('Saída registrada');
+        document.getElementById('saida-descricao').value = '';
+        document.getElementById('saida-valor').value = '';
+        carregarLancamentos();
+        apurarDia();
+        apurarMes();
+        atualizarValoresReceber();
+    });
+
+    // ==================== APURAÇÃO DIA ====================
+    function apurarDia() {
+        let data = document.getElementById('data-apuracao').value;
+        if(!data) data = new Date().toISOString().slice(0,10);
+        document.getElementById('data-apuracao').value = data;
+        const dataObj = new Date(data);
+        console.log("Apurando dia:", data);
+        try {
+            const ap = getApuraçãoDia(dataObj);
+            console.log("Resultado apuração dia:", ap);
+            const div = document.getElementById('apuracao-dia');
+            if(!ap || (ap.totalEntradas===0 && ap.totalSaidas===0 && (!ap.lancamentos || ap.lancamentos.length===0))) {
+                div.innerHTML = `<div class="alert alert-info">Nenhum movimento em ${data}</div>`;
+                return;
+            }
+            let html = `<div class="resumo-card">
+                <div class="resumo-item">Entradas: ${formatarMoeda(ap.totalEntradas)}</div>
+                <div class="resumo-item">Saídas: ${formatarMoeda(ap.totalSaidas)}</div>
+                <div class="resumo-item">Saldo: ${formatarMoeda(ap.saldo)}</div>
+            </div>
+            <h4>Por método de pagamento (entradas)</h4>
+            <div class="metodos-grid">`;
+            for(const [met,val] of Object.entries(ap.porMetodo)) if(val>0) html += `<div class="metodo-item">${met.toUpperCase()}: ${formatarMoeda(val)}</div>`;
+            html += `</div><small>${ap.lancamentos?.length || 0} lançamentos</small>`;
+            div.innerHTML = html;
+        } catch(e) {
+            console.error("Erro ao apurar dia:", e);
+            document.getElementById('apuracao-dia').innerHTML = `<div class="alert alert-danger">Erro ao carregar: ${e.message}</div>`;
+        }
+    }
+
+    // ==================== APURAÇÃO MÊS ====================
+    function apurarMes() {
+        const mes = parseInt(document.getElementById('mes-apuracao').value);
+        const ano = parseInt(document.getElementById('ano-apuracao').value);
+        console.log("Apurando mês:", mes, ano);
+        try {
+            const ap = getApuraçãoMes(mes, ano);
+            console.log("Resultado apuração mês:", ap);
+            const div = document.getElementById('apuracao-mes');
+            if(!ap || (ap.totalEntradas===0 && ap.totalSaidas===0 && (!ap.lancamentos || ap.lancamentos.length===0))) {
+                div.innerHTML = `<div class="alert alert-info">Nenhum movimento em ${mes+1}/${ano}</div>`;
+                return;
+            }
+            let html = `<div class="resumo-card">
+                <div class="resumo-item">Entradas: ${formatarMoeda(ap.totalEntradas)}</div>
+                <div class="resumo-item">Saídas: ${formatarMoeda(ap.totalSaidas)}</div>
+                <div class="resumo-item">Saldo: ${formatarMoeda(ap.saldo)}</div>
+            </div>
+            <h4>Por método de pagamento (entradas)</h4>
+            <div class="metodos-grid">`;
+            for(const [met,val] of Object.entries(ap.porMetodo)) if(val>0) html += `<div class="metodo-item">${met.toUpperCase()}: ${formatarMoeda(val)}</div>`;
+            html += `</div><small>${ap.lancamentos?.length || 0} lançamentos</small>`;
+            div.innerHTML = html;
+        } catch(e) {
+            console.error("Erro ao apurar mês:", e);
+            document.getElementById('apuracao-mes').innerHTML = `<div class="alert alert-danger">Erro ao carregar: ${e.message}</div>`;
+        }
+    }
+
+    // ==================== LISTAGEM DE LANÇAMENTOS ====================
+    let todosLancamentos = [];
+    function carregarLancamentos() {
+        todosLancamentos = getLancamentosCaixa();
+        todosLancamentos.sort((a,b)=>new Date(b.data)-new Date(a.data));
+        aplicarFiltro();
+    }
+    function aplicarFiltro() {
+        const tipo = document.getElementById('filtro-tipo').value;
+        let filtrados = [...todosLancamentos];
+        if(tipo !== 'todos') filtrados = filtrados.filter(l => l.tipo === tipo);
+        const div = document.getElementById('lista-lancamentos');
+        if(!filtrados.length) { div.innerHTML = '<p>Nenhum lançamento</p>'; return; }
+        let html = '<table class="tabela-lista"><thead><tr><th>Data</th><th>Tipo</th><th>Descrição</th><th>Valor</th><th>Meio</th><th>OS</th></tr></thead><tbody>';
+        filtrados.forEach(l => {
+            const valorDisplay = l.tipo==='entrada' ? formatarMoeda(l.valor) : `- ${formatarMoeda(l.valor)}`;
+            const osLink = l.osId ? `<a href="cupom.html?id=${l.osId}" target="_blank">${l.osId}</a>` : '—';
+            html += `<tr><td>${new Date(l.data).toLocaleString()}</td><td>${l.tipo==='entrada'?'💰 Entrada':'💸 Saída'}</td><td>${escapeHtml(l.descricao)}</td><td>${valorDisplay}</td><td>${l.metodoPagamento.toUpperCase()}</td><td>${osLink}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        div.innerHTML = html;
+    }
+
+    // Eventos
+    document.getElementById('btn-apurar-dia').addEventListener('click', apurarDia);
+    document.getElementById('btn-apurar-mes').addEventListener('click', apurarMes);
+    document.getElementById('btn-filtrar').addEventListener('click', aplicarFiltro);
+    document.getElementById('btn-limpar-filtro').addEventListener('click', () => {
+        document.getElementById('filtro-tipo').value = 'todos';
+        aplicarFiltro();
+    });
+
+    // Inicializar
+    document.addEventListener('DOMContentLoaded', () => {
+        const hoje = new Date().toISOString().slice(0,10);
+        document.getElementById('data-apuracao').value = hoje;
+        document.getElementById('ano-apuracao').value = new Date().getFullYear();
+        atualizarValoresReceber();
+        carregarLancamentos();
+        apurarDia();   // executa ao carregar
+        apurarMes();   // executa ao carregar
+    });
+</script>
+</body>
+</html>
